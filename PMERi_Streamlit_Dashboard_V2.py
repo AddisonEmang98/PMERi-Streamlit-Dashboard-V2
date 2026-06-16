@@ -81,19 +81,24 @@ if metrics is not None:
             margin-bottom: 30px;
             font-size: 16px;
         }
+
         .thesis-table th {
             background-color: #0f172a;
             color: #f8fafc;
             font-weight: bold;
             padding: 12px;
-            text-align: left;
+            text-align: center;
             border: 2px solid #3b82f6;
         }
+
         .thesis-table td {
             padding: 12px;
             border: 2px solid #3b82f6;
             color: inherit;
+            text-align: center;
+            vertical-align: middle;
         }
+
         .thesis-table tr:nth-child(even) {
             background-color: rgba(59, 130, 246, 0.05);
         }
@@ -143,26 +148,48 @@ if metrics is not None:
 
     st.markdown(html_metrics_table, unsafe_allow_html=True)
 
+    # =====================================
+    # CV BREAKDOWN TABLE
+    # =====================================
     st.subheader("5-Fold Cross-Validation Breakdown")
 
     regressor_cv_folds = metrics.get("regressor_cv_folds", [])
 
     if len(regressor_cv_folds) == 5:
-        cv_table = pd.DataFrame({
-            "Fold": ["Fold 1", "Fold 2", "Fold 3", "Fold 4", "Fold 5"],
-            "Regressor R²": regressor_cv_folds
-        })
+        html_cv_table = f"""
+        <table class="thesis-table">
+            <thead>
+                <tr>
+                    <th>Fold</th>
+                    <th>Regressor R²</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Fold 1</td>
+                    <td>{regressor_cv_folds[0]:.3f}</td>
+                </tr>
+                <tr>
+                    <td>Fold 2</td>
+                    <td>{regressor_cv_folds[1]:.3f}</td>
+                </tr>
+                <tr>
+                    <td>Fold 3</td>
+                    <td>{regressor_cv_folds[2]:.3f}</td>
+                </tr>
+                <tr>
+                    <td>Fold 4</td>
+                    <td>{regressor_cv_folds[3]:.3f}</td>
+                </tr>
+                <tr>
+                    <td>Fold 5</td>
+                    <td>{regressor_cv_folds[4]:.3f}</td>
+                </tr>
+            </tbody>
+        </table>
+        """
 
-        st.dataframe(
-            cv_table.style.format({
-                "Regressor R²": "{:.3f}"
-            }),
-            use_container_width=True
-        )
-
-else:
-    st.warning("model_metrics.pkl not found. Model performance table will not be displayed.")
-
+        st.markdown(html_cv_table, unsafe_allow_html=True)
 
 # =====================================
 # INPUT SECTION
