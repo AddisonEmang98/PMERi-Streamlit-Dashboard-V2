@@ -43,7 +43,6 @@ st.caption("Predictive Model for Environmental Risk Index")
 # =====================================
 # LOAD REQUIRED FILES
 # =====================================
-CLASSIFIER_FILE = "PMERi_RandomForest_Model.pkl"
 REGRESSOR_FILE = "PMERi_RF_Regressor.pkl"
 METRICS_FILE = "model_metrics.pkl"
 DATA_FILE = "Corrected_PMERi_Data.csv"
@@ -51,7 +50,7 @@ LOG_FILE = "predictions_log.csv"
 
 missing_files = []
 
-for file in [CLASSIFIER_FILE, REGRESSOR_FILE, DATA_FILE]:
+for file in [REGRESSOR_FILE, DATA_FILE]:
     if not os.path.exists(file):
         missing_files.append(file)
 
@@ -59,7 +58,6 @@ if missing_files:
     st.error(f"Missing required file(s): {', '.join(missing_files)}")
     st.stop()
 
-clf_model = joblib.load(CLASSIFIER_FILE)
 reg_model = joblib.load(REGRESSOR_FILE)
 df = pd.read_csv(DATA_FILE)
 
@@ -115,31 +113,6 @@ if metrics is not None:
         </thead>
         <tbody>
             <tr>
-                <td rowspan="6"><b>Classification Framework</b><br>Discrete Risk Label Predictor</td>
-                <td>Classifier Accuracy</td>
-                <td>{metrics["classifier_accuracy"]:.3f}</td>
-            </tr>
-            <tr>
-                <td>Classifier F1-Macro</td>
-                <td>{metrics["classifier_f1"]:.3f}</td>
-            </tr>
-            <tr>
-                <td>Precision</td>
-                <td>{metrics["classifier_precision"]:.3f}</td>
-            </tr>
-            <tr>
-                <td>Recall</td>
-                <td>{metrics["classifier_recall"]:.3f}</td>
-            </tr>
-            <tr>
-                <td>Cross-Validation Mean</td>
-                <td>{metrics["classifier_cv_mean"]:.3f}</td>
-            </tr>
-            <tr>
-                <td>Cross-Validation Standard Deviation</td>
-                <td>{metrics["classifier_cv_std"]:.3f}</td>
-            </tr>
-            <tr>
                 <td rowspan="6"><b>Regression Framework</b><br>Continuous PMERi Score Predictor</td>
                 <td>R² Score</td>
                 <td>{metrics["regressor_r2"]:.3f}</td>
@@ -157,7 +130,7 @@ if metrics is not None:
                 <td>{metrics["regressor_rmse"]:.4f}</td>
             </tr>
             <tr>
-                <td>Cross-Validation Mean</td>
+                <td>Cross-Validation Mean R²</td>
                 <td>{metrics["regressor_cv_mean"]:.3f}</td>
             </tr>
             <tr>
@@ -172,19 +145,16 @@ if metrics is not None:
 
     st.subheader("5-Fold Cross-Validation Breakdown")
 
-    classifier_cv_folds = metrics.get("classifier_cv_folds", [])
     regressor_cv_folds = metrics.get("regressor_cv_folds", [])
 
-    if len(classifier_cv_folds) == 5 and len(regressor_cv_folds) == 5:
+    if len(regressor_cv_folds) == 5:
         cv_table = pd.DataFrame({
             "Fold": ["Fold 1", "Fold 2", "Fold 3", "Fold 4", "Fold 5"],
-            "Classifier F1-Macro": classifier_cv_folds,
             "Regressor R²": regressor_cv_folds
         })
 
         st.dataframe(
             cv_table.style.format({
-                "Classifier F1-Macro": "{:.3f}",
                 "Regressor R²": "{:.3f}"
             }),
             use_container_width=True
@@ -234,20 +204,9 @@ if st.button("Run PMERi Analysis"):
         "Lighting (LUX)": normalize(lighting, 200, 750)
     }])
 
-    # Classifier prediction
-    rf_prediction = clf_model.predict(input_data)[0]
-    rf_probability = clf_model.predict_proba(input_data)[0]
-
-    risk_map = {
-        0: "Low Risk",
-        1: "Moderate Risk",
-        2: "High Risk"
-    }
-
-    rf_risk_class = risk_map[rf_prediction]
-    rf_confidence = max(rf_probability) * 100
-
-    # Regressor prediction
+    # =====================================
+    # REGRESSOR PREDICTION
+    # =====================================
     pmeri_score = reg_model.predict(input_data)[0]
     pmeri_score = max(0.0, min(1.0, pmeri_score))
     pmeri_category = get_pmeri_category(pmeri_score)
@@ -255,7 +214,7 @@ if st.button("Run PMERi Analysis"):
     # =====================================
     # ALERT SYSTEM
     # =====================================
-    if pmeri_category == "High Risk" or rf_risk_class == "High Risk":
+    if pmeri_category == "High Risk":
         st.error("🚨 HIGH RISK ALERT DETECTED — IMMEDIATE ACTION REQUIRED")
 
         st.markdown(
@@ -267,7 +226,7 @@ if st.button("Run PMERi Analysis"):
             unsafe_allow_html=True
         )
 
-    elif pmeri_category == "Moderate Risk" or rf_risk_class == "Moderate Risk":
+    elif pmeri_category == "Moderate Risk":
         st.warning("⚠️ MODERATE RISK — MONITOR CONDITIONS CLOSELY")
 
     else:
@@ -278,12 +237,11 @@ if st.button("Run PMERi Analysis"):
     # =====================================
     st.header("Live Risk Monitoring")
 
-    colA, colB, colC, colD = st.columns(4)
+    colA, colB, colC = st.columns(3)
 
     colA.metric("Predicted PMERi Score", f"{pmeri_score:.3f}")
     colB.metric("PMERi Category", pmeri_category)
-    colC.metric("RF Risk Class", rf_risk_class)
-    colD.metric("RF Confidence", f"{rf_confidence:.2f}%")
+    colC.metric("Model Type", "Random Forest Regressor")
 
     # =====================================
     # RISK GAUGE
@@ -316,47 +274,8 @@ if st.button("Run PMERi Analysis"):
     )
 
     # =====================================
-    # CLASSIFIER PROBABILITY
+    # REGRESSOR FEATURE IMPORTANCE
     # =====================================
-    st.subheader("Classifier Prediction Probability Distribution")
-
-    probability_df = pd.DataFrame({
-        "Risk Class": [risk_map[cls] for cls in clf_model.classes_],
-        "Probability (%)": rf_probability * 100
-    })
-
-    st.dataframe(
-        probability_df.style.format({"Probability (%)": "{:.2f}"}),
-        use_container_width=True
-    )
-
-    fig_prob = px.bar(
-        probability_df,
-        x="Risk Class",
-        y="Probability (%)",
-        text="Probability (%)",
-        title="Random Forest Classifier Probability Distribution"
-    )
-
-    fig_prob.update_traces(
-        texttemplate="%{text:.2f}%",
-        textposition="outside"
-    )
-
-    st.plotly_chart(fig_prob, use_container_width=True)
-
-    # =====================================
-    # FEATURE IMPORTANCE
-    # =====================================
-    st.subheader("Classifier Feature Importance")
-
-    clf_importance = pd.Series(
-        clf_model.feature_importances_,
-        index=input_data.columns
-    ).sort_values(ascending=False)
-
-    st.bar_chart(clf_importance)
-
     st.subheader("Regressor Feature Importance")
 
     reg_importance = pd.Series(
@@ -490,8 +409,7 @@ if st.button("Run PMERi Analysis"):
         "AQI": aqi,
         "Predicted PMERi Score": pmeri_score,
         "PMERi Category": pmeri_category,
-        "RF Risk Class": rf_risk_class,
-        "RF Confidence (%)": rf_confidence
+        "Model Type": "Random Forest Regressor"
     }])
 
     if os.path.exists(LOG_FILE):
