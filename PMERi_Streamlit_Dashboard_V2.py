@@ -1,50 +1,79 @@
 import os
 from datetime import datetime
+
 import joblib
 import pandas as pd
 import streamlit as st
+import plotly.express as px
 
-def get_pmeri_level(score):
+
+# =====================================
+# RISK THRESHOLD FUNCTION
+# =====================================
+def get_pmeri_category(score):
     if score < 0.45:
-        return "LOW"
+        return "Low Risk"
     elif score < 0.60:
-        return "MODERATE"
+        return "Moderate Risk"
     else:
-        return "HIGH"
+        return "High Risk"
+
 
 # =====================================
-# LOAD MODELS
-# =====================================
-clf_model = joblib.load("PMERi_RandomForest_Model.pkl")
-
-metrics = None
-if os.path.exists("model_metrics.pkl"):
-    metrics = joblib.load("model_metrics.pkl")
-
-df = pd.read_csv("Corrected_PMERi_Data.csv")
-LOG_FILE = "predictions_log.csv"
-
-# =====================================
-# NORMALIZATION
+# NORMALIZATION FUNCTION
 # =====================================
 def normalize(value, vmin, vmax):
-    return max(0.0, min(1.0, (value - vmin) / (vmax - vmin)))
+    norm = (value - vmin) / (vmax - vmin)
+    return max(0.0, min(1.0, norm))
+
 
 # =====================================
 # PAGE CONFIG
 # =====================================
-st.set_page_config(page_title="PMERi DSS", layout="wide")
+st.set_page_config(
+    page_title="PMERi DSS",
+    page_icon="⚙️",
+    layout="wide"
+)
 
 st.title("⚙️ PMERi Dashboard")
 st.caption("Predictive Model for Environmental Risk Index")
 
+
 # =====================================
-# MODEL PERFORMANCE (THESIS SECTION)
+# LOAD REQUIRED FILES
+# =====================================
+CLASSIFIER_FILE = "PMERi_RandomForest_Model.pkl"
+REGRESSOR_FILE = "PMERi_RF_Regressor.pkl"
+METRICS_FILE = "model_metrics.pkl"
+DATA_FILE = "Corrected_PMERi_Data.csv"
+LOG_FILE = "predictions_log.csv"
+
+missing_files = []
+
+for file in [CLASSIFIER_FILE, REGRESSOR_FILE, DATA_FILE]:
+    if not os.path.exists(file):
+        missing_files.append(file)
+
+if missing_files:
+    st.error(f"Missing required file(s): {', '.join(missing_files)}")
+    st.stop()
+
+clf_model = joblib.load(CLASSIFIER_FILE)
+reg_model = joblib.load(REGRESSOR_FILE)
+df = pd.read_csv(DATA_FILE)
+
+metrics = None
+if os.path.exists(METRICS_FILE):
+    metrics = joblib.load(METRICS_FILE)
+
+
+# =====================================
+# MODEL PERFORMANCE SECTION
 # =====================================
 st.header("Model Performance Matrix")
 
-if metrics:
-    # High-contrast CSS styling injection for clean thesis table borders
+if metrics is not None:
     st.markdown("""
         <style>
         .thesis-table {
@@ -60,23 +89,20 @@ if metrics:
             font-weight: bold;
             padding: 12px;
             text-align: left;
-            border: 2px solid #3b82f6; /* High-contrast vibrant blue lines */
+            border: 2px solid #3b82f6;
         }
         .thesis-table td {
             padding: 12px;
-            border: 2px solid #3b82f6; /* High-contrast vibrant blue lines */
+            border: 2px solid #3b82f6;
             color: inherit;
         }
         .thesis-table tr:nth-child(even) {
-            background-color: rgba(59, 130, 246, 0.05); /* Soft background alternate tint */
+            background-color: rgba(59, 130, 246, 0.05);
         }
         </style>
     """, unsafe_allow_html=True)
 
-    st.subheader("Classification & Regression Evaluation Summary")
-
-    # Calculate Mean Squared Error from raw RMSE footprint
-    mse_value = metrics['regressor_rmse'] ** 2
+    mse_value = metrics["regressor_rmse"] ** 2
 
     html_metrics_table = f"""
     <table class="thesis-table">
@@ -89,90 +115,84 @@ if metrics:
         </thead>
         <tbody>
             <tr>
-                <td rowspan="6"><b>Classification Framework</b><br>(Discrete Risk Label Predictor)</td>
+                <td rowspan="6"><b>Classification Framework</b><br>Discrete Risk Label Predictor</td>
                 <td>Classifier Accuracy</td>
-                <td>{metrics['classifier_accuracy']:.3f}</td>
+                <td>{metrics["classifier_accuracy"]:.3f}</td>
             </tr>
             <tr>
                 <td>Classifier F1-Macro</td>
-                <td>{metrics['classifier_f1']:.3f}</td>
+                <td>{metrics["classifier_f1"]:.3f}</td>
             </tr>
             <tr>
                 <td>Precision</td>
-                <td>{metrics['classifier_precision']:.3f}</td>
+                <td>{metrics["classifier_precision"]:.3f}</td>
             </tr>
             <tr>
                 <td>Recall</td>
-                <td>{metrics['classifier_recall']:.3f}</td>
+                <td>{metrics["classifier_recall"]:.3f}</td>
             </tr>
             <tr>
-                <td>Cross-Validation Mean (F1-Macro)</td>
-                <td>{metrics['classifier_cv_mean']:.3f}</td>
+                <td>Cross-Validation Mean</td>
+                <td>{metrics["classifier_cv_mean"]:.3f}</td>
             </tr>
             <tr>
                 <td>Cross-Validation Standard Deviation</td>
-                <td>{metrics['classifier_cv_std']:.3f}</td>
+                <td>{metrics["classifier_cv_std"]:.3f}</td>
             </tr>
             <tr>
-                <td rowspan="4"><b>Regression Framework</b><br>(Continuous PMERi Predictor)</td>
+                <td rowspan="6"><b>Regression Framework</b><br>Continuous PMERi Score Predictor</td>
                 <td>R² Score</td>
-                <td>{metrics['regressor_r2']:.3f}</td>
+                <td>{metrics["regressor_r2"]:.3f}</td>
             </tr>
             <tr>
-                <td>Mean Squared Error (MSE)</td>
+                <td>Mean Squared Error</td>
                 <td>{mse_value:.5f}</td>
             </tr>
             <tr>
-                <td>Mean Absolute Error (MAE)</td>
-                <td>{metrics['regressor_mae']:.4f}</td>
+                <td>Mean Absolute Error</td>
+                <td>{metrics["regressor_mae"]:.4f}</td>
             </tr>
             <tr>
-                <td>Root Mean Squared Error (RMSE)</td>
-                <td>{metrics['regressor_rmse']:.4f}</td>
+                <td>Root Mean Squared Error</td>
+                <td>{metrics["regressor_rmse"]:.4f}</td>
+            </tr>
+            <tr>
+                <td>Cross-Validation Mean</td>
+                <td>{metrics["regressor_cv_mean"]:.3f}</td>
+            </tr>
+            <tr>
+                <td>Cross-Validation Standard Deviation</td>
+                <td>{metrics["regressor_cv_std"]:.3f}</td>
             </tr>
         </tbody>
     </table>
     """
+
     st.markdown(html_metrics_table, unsafe_allow_html=True)
 
-    # =====================================
-    # 5-FOLD CROSS-VALIDATION BREAKDOWN TABLE
-    # =====================================
-    st.subheader("Stratified 5-Fold Cross-Validation Breakdown Matrix")
+    st.subheader("5-Fold Cross-Validation Breakdown")
 
-    # Fetch the metric from the loaded file
-    cv_data = metrics.get("classifier_cv_folds", 0.787)
+    classifier_cv_folds = metrics.get("classifier_cv_folds", [])
+    regressor_cv_folds = metrics.get("regressor_cv_folds", [])
 
-    # SAFE CHECK: If it is a single float, automatically convert it into a valid 5-fold list matching your V2 logs
-    if isinstance(cv_data, (int, float)):
-        # Synthesize the exact fold array from your V2 run output log to keep the dashboard accurate
-        cv_folds = [0.724, 0.821, 0.576, 0.935, 0.880]
-    else:
-        cv_folds = cv_data
+    if len(classifier_cv_folds) == 5 and len(regressor_cv_folds) == 5:
+        cv_table = pd.DataFrame({
+            "Fold": ["Fold 1", "Fold 2", "Fold 3", "Fold 4", "Fold 5"],
+            "Classifier F1-Macro": classifier_cv_folds,
+            "Regressor R²": regressor_cv_folds
+        })
 
-    html_cv_table = f"""
-        <table class="thesis-table" style="text-align: center;">
-            <thead>
-                <tr>
-                    <th style="text-align: center; background-color: #0f172a;">Fold 1</th>
-                    <th style="text-align: center; background-color: #0f172a;">Fold 2</th>
-                    <th style="text-align: center; background-color: #0f172a;">Fold 3</th>
-                    <th style="text-align: center; background-color: #0f172a;">Fold 4</th>
-                    <th style="text-align: center; background-color: #0f172a;">Fold 5</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td><b>{cv_folds[0]:.3f}</b></td>
-                    <td><b>{cv_folds[1]:.3f}</b></td>
-                    <td><b>{cv_folds[2]:.3f}</b></td>
-                    <td><b>{cv_folds[3]:.3f}</b></td>
-                    <td><b>{cv_folds[4]:.3f}</b></td>
-                </tr>
-            </tbody>
-        </table>
-        """
-    st.markdown(html_cv_table, unsafe_allow_html=True)
+        st.dataframe(
+            cv_table.style.format({
+                "Classifier F1-Macro": "{:.3f}",
+                "Regressor R²": "{:.3f}"
+            }),
+            use_container_width=True
+        )
+
+else:
+    st.warning("model_metrics.pkl not found. Model performance table will not be displayed.")
+
 
 # =====================================
 # INPUT SECTION
@@ -182,23 +202,23 @@ st.header("Real-Time Environmental Input")
 col1, col2 = st.columns(2)
 
 with col1:
-    pm25 = st.number_input("PM2.5", 0.0, 300.0, 50.0)
-    pm10 = st.number_input("PM10", 0.0, 300.0, 80.0)
-    co2 = st.number_input("CO2", 0.0, 5000.0, 600.0)
-    hcho = st.number_input("HCHO", 0.0, 0.3, 0.05)
+    pm25 = st.number_input("PM2.5 (µg/m³)", 0.0, 300.0, 50.0)
+    pm10 = st.number_input("PM10 (µg/m³)", 0.0, 300.0, 80.0)
+    co2 = st.number_input("CO₂ (ppm)", 0.0, 5000.0, 600.0)
+    hcho = st.number_input("HCHO (ppm)", 0.0, 0.3, 0.05)
 
 with col2:
-    temp = st.number_input("Temperature", 0.0, 60.0, 25.0)
-    humidity = st.number_input("Humidity", 0.0, 100.0, 60.0)
-    noise = st.number_input("Noise", 0.0, 120.0, 70.0)
-    lighting = st.number_input("Lighting", 0.0, 1000.0, 300.0)
+    temp = st.number_input("Temperature (°C)", 0.0, 60.0, 25.0)
+    humidity = st.number_input("Humidity (%)", 0.0, 100.0, 60.0)
+    noise = st.number_input("Noise (dBA)", 0.0, 120.0, 70.0)
+    lighting = st.number_input("Lighting (lux)", 0.0, 1000.0, 300.0)
+
 
 # =====================================
-# PREDICTION
+# PREDICTION SECTION
 # =====================================
 if st.button("Run PMERi Analysis"):
 
-    # AQI
     aqi = (
         normalize(pm25, 15, 75) +
         normalize(pm10, 15, 70) +
@@ -214,31 +234,28 @@ if st.button("Run PMERi Analysis"):
         "Lighting (LUX)": normalize(lighting, 200, 750)
     }])
 
-    prediction = clf_model.predict(input_data)
-    proba = clf_model.predict_proba(input_data)
+    # Classifier prediction
+    rf_prediction = clf_model.predict(input_data)[0]
+    rf_probability = clf_model.predict_proba(input_data)[0]
 
-    risk_map = {0: "Low", 1: "Moderate", 2: "High"}
-    risk = prediction[0]
+    risk_map = {
+        0: "Low Risk",
+        1: "Moderate Risk",
+        2: "High Risk"
+    }
 
-    pmeri_score = input_data.mean(axis=1).iloc[0]
-    pmeri_level = get_pmeri_level(pmeri_score)
-    rf_level = risk_map[risk]
-    alarm_trigger = False
-    alarm_message = None
+    rf_risk_class = risk_map[rf_prediction]
+    rf_confidence = max(rf_probability) * 100
 
-    if pmeri_score < 0.4:
-        pmeri_category = "Low Risk"
-    elif pmeri_score < 0.7:
-        pmeri_category = "Moderate Risk"
-    else:
-        pmeri_category = "High Risk"
-        alarm_trigger = True
-        alarm_message = "HIGH RISK DETECTED: Immediate action required!"
+    # Regressor prediction
+    pmeri_score = reg_model.predict(input_data)[0]
+    pmeri_score = max(0.0, min(1.0, pmeri_score))
+    pmeri_category = get_pmeri_category(pmeri_score)
 
     # =====================================
-    # ALARM SYSTEM (TOP BANNER)
+    # ALERT SYSTEM
     # =====================================
-    if alarm_trigger:
+    if pmeri_category == "High Risk" or rf_risk_class == "High Risk":
         st.error("🚨 HIGH RISK ALERT DETECTED — IMMEDIATE ACTION REQUIRED")
 
         st.markdown(
@@ -250,147 +267,147 @@ if st.button("Run PMERi Analysis"):
             unsafe_allow_html=True
         )
 
-    elif pmeri_level == "MODERATE" or rf_level == "Moderate":
+    elif pmeri_category == "Moderate Risk" or rf_risk_class == "Moderate Risk":
         st.warning("⚠️ MODERATE RISK — MONITOR CONDITIONS CLOSELY")
 
     else:
         st.success("🟢 SAFE CONDITIONS — NO IMMEDIATE RISK")
 
-    # ================================
-    # ALARM LOGIC (BOTH TRIGGERS)
-    # ================================
-    alarm_trigger = (pmeri_level == "HIGH") or (rf_level == "High")
-
-    # ================================
-    # PMERi CATEGORY CLASSIFICATION
-    # ================================
-    if pmeri_score < 0.4:
-        pmeri_category = "Low Risk"
-        color = "green"
-    elif pmeri_score < 0.7:
-        pmeri_category = "Moderate Risk"
-        color = "orange"
-    else:
-        pmeri_category = "High Risk"
-        color = "red"
-
     # =====================================
-    # REAL-TIME DASHBOARD
+    # LIVE RISK MONITORING
     # =====================================
     st.header("Live Risk Monitoring")
 
     colA, colB, colC, colD = st.columns(4)
 
-    colA.metric("PMERi Score", f"{pmeri_score:.3f}")
+    colA.metric("Predicted PMERi Score", f"{pmeri_score:.3f}")
     colB.metric("PMERi Category", pmeri_category)
-    colC.metric("RF Risk Class", risk_map[risk])
-    colD.metric("Confidence", f"{max(proba[0])*100:.2f}%")
+    colC.metric("RF Risk Class", rf_risk_class)
+    colD.metric("RF Confidence", f"{rf_confidence:.2f}%")
 
     # =====================================
-    # RISK GAUGE (INTERACTIVE - STREAMLIT NATIVE)
+    # RISK GAUGE
     # =====================================
     st.subheader("Risk Gauge")
 
-    # Convert PMERi score to percentage scale
-    gauge_value = pmeri_score * 100
+    gauge_value = int(pmeri_score * 100)
+    st.progress(gauge_value)
 
-    # Interactive progress bar
-    st.progress(int(gauge_value))
-
-    # Risk interpretation (aligned with your classifier)
-    if risk == 0:
+    if pmeri_category == "Low Risk":
         st.success(f"🟢 LOW RISK ({gauge_value:.1f}%)")
         st.write("Safe operating conditions. No immediate intervention required.")
 
-    elif risk == 1:
+    elif pmeri_category == "Moderate Risk":
         st.warning(f"🟡 MODERATE RISK ({gauge_value:.1f}%)")
-        st.write("Monitor environmental conditions! Preventive action recommended.")
+        st.write("Monitor environmental conditions. Preventive action is recommended.")
 
     else:
         st.error(f"🔴 HIGH RISK ({gauge_value:.1f}%)")
-        st.write("Critical conditions detected! Immediate action required.")
+        st.write("Critical environmental condition detected. Immediate action is required.")
 
     # =====================================
-    # PROBABILITY
+    # NORMALIZED INPUT TABLE
     # =====================================
-    st.subheader("Prediction Probability Distribution")
+    st.subheader("Normalized Input Values")
 
-    for cls, p in zip(clf_model.classes_, proba[0]):
-        st.write(f"{risk_map[cls]}: {p*100:.2f}%")
+    st.dataframe(
+        input_data.T.rename(columns={0: "Normalized Value"}).style.format("{:.3f}"),
+        use_container_width=True
+    )
+
+    # =====================================
+    # CLASSIFIER PROBABILITY
+    # =====================================
+    st.subheader("Classifier Prediction Probability Distribution")
+
+    probability_df = pd.DataFrame({
+        "Risk Class": [risk_map[cls] for cls in clf_model.classes_],
+        "Probability (%)": rf_probability * 100
+    })
+
+    st.dataframe(
+        probability_df.style.format({"Probability (%)": "{:.2f}"}),
+        use_container_width=True
+    )
+
+    fig_prob = px.bar(
+        probability_df,
+        x="Risk Class",
+        y="Probability (%)",
+        text="Probability (%)",
+        title="Random Forest Classifier Probability Distribution"
+    )
+
+    fig_prob.update_traces(
+        texttemplate="%{text:.2f}%",
+        textposition="outside"
+    )
+
+    st.plotly_chart(fig_prob, use_container_width=True)
 
     # =====================================
     # FEATURE IMPORTANCE
     # =====================================
-    st.subheader("Feature Importance (Model Explainability)")
+    st.subheader("Classifier Feature Importance")
 
-    fi = pd.Series(clf_model.feature_importances_, index=input_data.columns)
-    st.bar_chart(fi.sort_values(ascending=False))
+    clf_importance = pd.Series(
+        clf_model.feature_importances_,
+        index=input_data.columns
+    ).sort_values(ascending=False)
+
+    st.bar_chart(clf_importance)
+
+    st.subheader("Regressor Feature Importance")
+
+    reg_importance = pd.Series(
+        reg_model.feature_importances_,
+        index=input_data.columns
+    ).sort_values(ascending=False)
+
+    st.bar_chart(reg_importance)
 
     # =====================================
-    # 📊 RISK DISTRIBUTION (INTERACTIVE PIE CHART)
+    # RISK DISTRIBUTION
     # =====================================
     st.markdown("---")
     st.subheader("Dataset Risk Distribution")
 
-    # 1. Verify and read the baseline training dataset
-    if os.path.exists("Corrected_PMERi_Data.csv"):
-        df_train = pd.read_csv("Corrected_PMERi_Data.csv")
-        risk_counts = df_train["Risk Label"].value_counts()
+    risk_counts = df["Risk Label"].value_counts()
 
-        # 2. Reconstruct your chart data into a structured pandas DataFrame
-        chart_df = pd.DataFrame([
-            {"Category": "Low Risk", "Count": int(risk_counts.get(0, 0))},
-            {"Category": "Moderate Risk", "Count": int(risk_counts.get(1, 0))},
-            {"Category": "High Risk", "Count": int(risk_counts.get(2, 0))}
-        ])
+    chart_df = pd.DataFrame([
+        {"Category": "Low Risk", "Count": int(risk_counts.get(0, 0))},
+        {"Category": "Moderate Risk", "Count": int(risk_counts.get(1, 0))},
+        {"Category": "High Risk", "Count": int(risk_counts.get(2, 0))}
+    ])
 
-        # 3. Build the interactive Plotly pie chart
-        import plotly.express as px
+    fig_pie = px.pie(
+        chart_df,
+        values="Count",
+        names="Category",
+        color="Category",
+        color_discrete_map={
+            "Low Risk": "#2ecc71",
+            "Moderate Risk": "#f1c40f",
+            "High Risk": "#e74c3c"
+        },
+        category_orders={
+            "Category": ["Low Risk", "Moderate Risk", "High Risk"]
+        },
+        hole=0.35,
+        title="Baseline Risk Label Distribution"
+    )
 
-        fig = px.pie(
-            chart_df,
-            values="Count",
-            names="Category",
-            color="Category",
-            # Custom OSH-themed color matching mapping values
-            color_discrete_map={
-                "Low Risk": "#2ecc71",  # Emerald Green
-                "Moderate Risk": "#f1c40f",  # Warning Yellow/Orange
-                "High Risk": "#e74c3c"  # Danger Red
-            },
-            # CHANGED: Explicitly force the legend hierarchy order
-            category_orders={"Category": ["Low Risk", "Moderate Risk", "High Risk"]},
-            hole=0.35
-        )
+    fig_pie.update_traces(
+        textinfo="percent+value",
+        textfont_size=12
+    )
 
-        # 4. Show both the exact count and percentage directly on the slices
-        fig.update_traces(textinfo="percent+value", textfont_size=12)
-
-        # CHANGED: Ensure legend layout stays fixed in the specified category order
-        fig.update_layout(
-            showlegend=True,
-            legend=dict(traceorder="normal")
-        )
-
-        # 5. Render the chart inside Streamlit
-        st.plotly_chart(fig, use_container_width=True)
-
-        st.write("Interactive distribution of baseline risk exposure records utilized during model training phases.")
-    else:
-        st.error(
-            "Baseline training file 'Corrected_PMERi_Data.csv' was not found in the local directory. Unable to display distribution analytics.")
+    st.plotly_chart(fig_pie, use_container_width=True)
 
     # =====================================
     # CORRELATION ANALYSIS
     # =====================================
-    import plotly.express as px
-
     st.header("Correlation Analysis")
-
-    # =====================================
-    # 1. Environmental Correlation Matrix
-    # =====================================
-    st.subheader("A. Environmental Correlation Matrix")
 
     env_variables = [
         "Air Quality Index (AQI)",
@@ -399,6 +416,8 @@ if st.button("Run PMERi Analysis"):
         "Noise (dBA)",
         "Lighting (LUX)"
     ]
+
+    st.subheader("A. Environmental Correlation Matrix")
 
     env_corr = df[env_variables].corr()
 
@@ -416,30 +435,13 @@ if st.button("Run PMERi Analysis"):
         yaxis_title="Environmental Variables"
     )
 
-    st.plotly_chart(
-        fig_corr,
-        use_container_width=True
-    )
+    st.plotly_chart(fig_corr, use_container_width=True)
 
-    st.caption(
-        "This matrix shows the relationships among the environmental stressors used in the PMERi system."
-    )
-
-    # =====================================
-    # 2. Pearson Correlation vs PMERi
-    # =====================================
     st.subheader("B. Pearson Correlation vs PMERi Score")
 
     pmeri_corr = (
         df[
-            [
-                "Air Quality Index (AQI)",
-                "Temperature (C)",
-                "Humidity (%)",
-                "Noise (dBA)",
-                "Lighting (LUX)",
-                "PMERi Score"
-            ]
+            env_variables + ["PMERi Score"]
         ]
         .corr()["PMERi Score"]
         .drop("PMERi Score")
@@ -451,7 +453,7 @@ if st.button("Run PMERi Analysis"):
         "Correlation": pmeri_corr.values
     })
 
-    fig_pmeri = px.bar(
+    fig_pmeri_corr = px.bar(
         corr_df,
         x="Environmental Variable",
         y="Correlation",
@@ -459,33 +461,37 @@ if st.button("Run PMERi Analysis"):
         title="Pearson Correlation Between Environmental Variables and PMERi Score"
     )
 
-    fig_pmeri.update_traces(
+    fig_pmeri_corr.update_traces(
         texttemplate="%{text:.3f}",
         textposition="outside"
     )
 
-    fig_pmeri.update_layout(
+    fig_pmeri_corr.update_layout(
         height=500,
         yaxis_title="Pearson Correlation Coefficient",
         xaxis_title="Environmental Variable"
     )
 
-    st.plotly_chart(
-        fig_pmeri,
-        use_container_width=True
-    )
-
-    st.caption(
-        "Higher absolute correlation values indicate stronger linear relationships with the PMERi Score."
-    )
+    st.plotly_chart(fig_pmeri_corr, use_container_width=True)
 
     # =====================================
     # LOGGING
     # =====================================
     log = pd.DataFrame([{
         "Time": datetime.now(),
-        "Prediction": risk_map[risk],
-        "PMERi": pmeri_score
+        "PM2.5": pm25,
+        "PM10": pm10,
+        "CO2": co2,
+        "HCHO": hcho,
+        "Temperature": temp,
+        "Humidity": humidity,
+        "Noise": noise,
+        "Lighting": lighting,
+        "AQI": aqi,
+        "Predicted PMERi Score": pmeri_score,
+        "PMERi Category": pmeri_category,
+        "RF Risk Class": rf_risk_class,
+        "RF Confidence (%)": rf_confidence
     }])
 
     if os.path.exists(LOG_FILE):
@@ -495,11 +501,13 @@ if st.button("Run PMERi Analysis"):
 
     st.success("Prediction logged successfully.")
 
-    # =====================================
-    # ACADEMIC FOOTER (THESIS METADATA)
-    # =====================================
-    st.markdown("---")
-    st.write(
-        "Developed as part of the requirement for Bachelor of Mechanical Engineering (Honours) at University Malaysia Sarawak (UNIMAS).")
-    st.write("Supervisor: Ts. Mohd. Azrin bin Mohd. Said")
-    st.write("FYP Student: Addison Ding Emang (83044)")
+
+# =====================================
+# ACADEMIC FOOTER
+# =====================================
+st.markdown("---")
+st.write(
+    "Developed as part of the requirement for Bachelor of Mechanical Engineering (Honours) at Universiti Malaysia Sarawak (UNIMAS)."
+)
+st.write("Supervisor: Ts. Mohd. Azrin bin Mohd. Said")
+st.write("FYP Student: Addison Ding Emang (83044)")
