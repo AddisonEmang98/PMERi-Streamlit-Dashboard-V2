@@ -7,9 +7,6 @@ import streamlit as st
 import plotly.express as px
 
 
-# =====================================
-# RISK THRESHOLD FUNCTION
-# =====================================
 def get_pmeri_category(score):
     if score < 0.45:
         return "Low Risk"
@@ -19,17 +16,11 @@ def get_pmeri_category(score):
         return "High Risk"
 
 
-# =====================================
-# NORMALIZATION FUNCTION
-# =====================================
 def normalize(value, vmin, vmax):
     norm = (value - vmin) / (vmax - vmin)
     return max(0.0, min(1.0, norm))
 
 
-# =====================================
-# PAGE CONFIG
-# =====================================
 st.set_page_config(
     page_title="PMERi DSS",
     page_icon="⚙️",
@@ -40,9 +31,6 @@ st.title("⚙️ PMERi Dashboard")
 st.caption("Predictive Model for Environmental Risk Index")
 
 
-# =====================================
-# LOAD REQUIRED FILES
-# =====================================
 REGRESSOR_FILE = "PMERi_RF_Regressor.pkl"
 METRICS_FILE = "model_metrics.pkl"
 DATA_FILE = "Corrected_PMERi_Data.csv"
@@ -65,7 +53,6 @@ metrics = None
 if os.path.exists(METRICS_FILE):
     metrics = joblib.load(METRICS_FILE)
 
-
 # =====================================
 # MODEL PERFORMANCE SECTION
 # =====================================
@@ -81,24 +68,19 @@ if metrics is not None:
             margin-bottom: 30px;
             font-size: 16px;
         }
-
         .thesis-table th {
             background-color: #0f172a;
             color: #f8fafc;
             font-weight: bold;
             padding: 12px;
-            text-align: center;
+            text-align: left;
             border: 2px solid #3b82f6;
         }
-
         .thesis-table td {
             padding: 12px;
             border: 2px solid #3b82f6;
             color: inherit;
-            text-align: center;
-            vertical-align: middle;
         }
-
         .thesis-table tr:nth-child(even) {
             background-color: rgba(59, 130, 246, 0.05);
         }
@@ -118,6 +100,31 @@ if metrics is not None:
         </thead>
         <tbody>
             <tr>
+                <td rowspan="6"><b>Classification Framework</b><br>Discrete Risk Label Predictor</td>
+                <td>Classifier Accuracy</td>
+                <td>{metrics["classifier_accuracy"]:.3f}</td>
+            </tr>
+            <tr>
+                <td>Classifier F1-Macro</td>
+                <td>{metrics["classifier_f1"]:.3f}</td>
+            </tr>
+            <tr>
+                <td>Precision</td>
+                <td>{metrics["classifier_precision"]:.3f}</td>
+            </tr>
+            <tr>
+                <td>Recall</td>
+                <td>{metrics["classifier_recall"]:.3f}</td>
+            </tr>
+            <tr>
+                <td>Cross-Validation Mean</td>
+                <td>{metrics["classifier_cv_mean"]:.3f}</td>
+            </tr>
+            <tr>
+                <td>Cross-Validation Standard Deviation</td>
+                <td>{metrics["classifier_cv_std"]:.3f}</td>
+            </tr>
+            <tr>
                 <td rowspan="6"><b>Regression Framework</b><br>Continuous PMERi Score Predictor</td>
                 <td>R² Score</td>
                 <td>{metrics["regressor_r2"]:.3f}</td>
@@ -135,7 +142,7 @@ if metrics is not None:
                 <td>{metrics["regressor_rmse"]:.4f}</td>
             </tr>
             <tr>
-                <td>Cross-Validation Mean R²</td>
+                <td>Cross-Validation Mean</td>
                 <td>{metrics["regressor_cv_mean"]:.3f}</td>
             </tr>
             <tr>
@@ -148,48 +155,35 @@ if metrics is not None:
 
     st.markdown(html_metrics_table, unsafe_allow_html=True)
 
-    # =====================================
-    # CV BREAKDOWN TABLE
-    # =====================================
     st.subheader("5-Fold Cross-Validation Breakdown")
 
+    classifier_cv_folds = metrics.get("classifier_cv_folds", [])
     regressor_cv_folds = metrics.get("regressor_cv_folds", [])
 
-    if len(regressor_cv_folds) == 5:
+    if len(classifier_cv_folds) == 5 and len(regressor_cv_folds) == 5:
         html_cv_table = f"""
         <table class="thesis-table">
             <thead>
                 <tr>
                     <th>Fold</th>
+                    <th>Classifier F1-Macro</th>
                     <th>Regressor R²</th>
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td>Fold 1</td>
-                    <td>{regressor_cv_folds[0]:.3f}</td>
-                </tr>
-                <tr>
-                    <td>Fold 2</td>
-                    <td>{regressor_cv_folds[1]:.3f}</td>
-                </tr>
-                <tr>
-                    <td>Fold 3</td>
-                    <td>{regressor_cv_folds[2]:.3f}</td>
-                </tr>
-                <tr>
-                    <td>Fold 4</td>
-                    <td>{regressor_cv_folds[3]:.3f}</td>
-                </tr>
-                <tr>
-                    <td>Fold 5</td>
-                    <td>{regressor_cv_folds[4]:.3f}</td>
-                </tr>
+                <tr><td>Fold 1</td><td>{classifier_cv_folds[0]:.3f}</td><td>{regressor_cv_folds[0]:.3f}</td></tr>
+                <tr><td>Fold 2</td><td>{classifier_cv_folds[1]:.3f}</td><td>{regressor_cv_folds[1]:.3f}</td></tr>
+                <tr><td>Fold 3</td><td>{classifier_cv_folds[2]:.3f}</td><td>{regressor_cv_folds[2]:.3f}</td></tr>
+                <tr><td>Fold 4</td><td>{classifier_cv_folds[3]:.3f}</td><td>{regressor_cv_folds[3]:.3f}</td></tr>
+                <tr><td>Fold 5</td><td>{classifier_cv_folds[4]:.3f}</td><td>{regressor_cv_folds[4]:.3f}</td></tr>
             </tbody>
         </table>
         """
 
         st.markdown(html_cv_table, unsafe_allow_html=True)
+
+else:
+    st.warning("model_metrics.pkl not found. Model performance table will not be displayed.")
 
 # =====================================
 # INPUT SECTION
@@ -231,16 +225,10 @@ if st.button("Run PMERi Analysis"):
         "Lighting (LUX)": normalize(lighting, 200, 750)
     }])
 
-    # =====================================
-    # REGRESSOR PREDICTION
-    # =====================================
     pmeri_score = reg_model.predict(input_data)[0]
     pmeri_score = max(0.0, min(1.0, pmeri_score))
     pmeri_category = get_pmeri_category(pmeri_score)
 
-    # =====================================
-    # ALERT SYSTEM
-    # =====================================
     if pmeri_category == "High Risk":
         st.error("🚨 HIGH RISK ALERT DETECTED — IMMEDIATE ACTION REQUIRED")
 
@@ -259,9 +247,6 @@ if st.button("Run PMERi Analysis"):
     else:
         st.success("🟢 SAFE CONDITIONS — NO IMMEDIATE RISK")
 
-    # =====================================
-    # LIVE RISK MONITORING
-    # =====================================
     st.header("Live Risk Monitoring")
 
     colA, colB, colC = st.columns(3)
@@ -270,9 +255,6 @@ if st.button("Run PMERi Analysis"):
     colB.metric("PMERi Category", pmeri_category)
     colC.metric("Model Type", "Random Forest Regressor")
 
-    # =====================================
-    # RISK GAUGE
-    # =====================================
     st.subheader("Risk Gauge")
 
     gauge_value = int(pmeri_score * 100)
@@ -290,19 +272,43 @@ if st.button("Run PMERi Analysis"):
         st.error(f"🔴 HIGH RISK ({gauge_value:.1f}%)")
         st.write("Critical environmental condition detected. Immediate action is required.")
 
-    # =====================================
-    # NORMALIZED INPUT TABLE
-    # =====================================
     st.subheader("Normalized Input Values")
 
-    st.dataframe(
-        input_data.T.rename(columns={0: "Normalized Value"}).style.format("{:.3f}"),
-        use_container_width=True
-    )
+    html_normalized_table = f"""
+    <table class="thesis-table">
+        <thead>
+            <tr>
+                <th>Environmental Variable</th>
+                <th>Normalized Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Air Quality Index (AQI)</td>
+                <td>{input_data.iloc[0]['Air Quality Index (AQI)']:.3f}</td>
+            </tr>
+            <tr>
+                <td>Temperature (C)</td>
+                <td>{input_data.iloc[0]['Temperature (C)']:.3f}</td>
+            </tr>
+            <tr>
+                <td>Humidity (%)</td>
+                <td>{input_data.iloc[0]['Humidity (%)']:.3f}</td>
+            </tr>
+            <tr>
+                <td>Noise (dBA)</td>
+                <td>{input_data.iloc[0]['Noise (dBA)']:.3f}</td>
+            </tr>
+            <tr>
+                <td>Lighting (LUX)</td>
+                <td>{input_data.iloc[0]['Lighting (LUX)']:.3f}</td>
+            </tr>
+        </tbody>
+    </table>
+    """
 
-    # =====================================
-    # REGRESSOR FEATURE IMPORTANCE
-    # =====================================
+    st.markdown(html_normalized_table, unsafe_allow_html=True)
+
     st.subheader("Regressor Feature Importance")
 
     reg_importance = pd.Series(
@@ -312,9 +318,6 @@ if st.button("Run PMERi Analysis"):
 
     st.bar_chart(reg_importance)
 
-    # =====================================
-    # RISK DISTRIBUTION
-    # =====================================
     st.markdown("---")
     st.subheader("Dataset Risk Distribution")
 
@@ -350,9 +353,6 @@ if st.button("Run PMERi Analysis"):
 
     st.plotly_chart(fig_pie, use_container_width=True)
 
-    # =====================================
-    # CORRELATION ANALYSIS
-    # =====================================
     st.header("Correlation Analysis")
 
     env_variables = [
@@ -420,9 +420,6 @@ if st.button("Run PMERi Analysis"):
 
     st.plotly_chart(fig_pmeri_corr, use_container_width=True)
 
-    # =====================================
-    # LOGGING
-    # =====================================
     log = pd.DataFrame([{
         "Time": datetime.now(),
         "PM2.5": pm25,
@@ -447,9 +444,6 @@ if st.button("Run PMERi Analysis"):
     st.success("Prediction logged successfully.")
 
 
-# =====================================
-# ACADEMIC FOOTER
-# =====================================
 st.markdown("---")
 st.write(
     "Developed as part of the requirement for Bachelor of Mechanical Engineering (Honours) at Universiti Malaysia Sarawak (UNIMAS)."
